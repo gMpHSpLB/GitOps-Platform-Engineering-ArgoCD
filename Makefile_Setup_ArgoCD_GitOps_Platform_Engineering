@@ -36,7 +36,20 @@ ARGOCD_PF_PID 					?= /tmp/argocd-port-forward.pid
 K8S_ARGOCD_NAMESPACE 			?= argocd
 ARGOCD_MANIFEST_URL 			?= https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
+ARGOCD_CMD_PARAMS_CM           ?= argocd-cmd-params-cm
+ARGOCD_MAIN_CM                 ?= argocd-cm
+ARGOCD_SERVER_DEPLOYMENT       ?= argocd-server
 
+ARGOCD_SERVER_INSECURE_KEY     ?= server.insecure
+ARGOCD_SERVER_INSECURE_VALUE   ?= false
+
+ARGOCD_RESOURCE_TRACKING_KEY   ?= application.resourceTrackingMethod
+ARGOCD_RESOURCE_TRACKING_VALUE ?= annotation
+
+ARGOCD_TIMEOUT_RECONCILIATION_KEY        ?= timeout.reconciliation
+ARGOCD_TIMEOUT_RECONCILIATION_VALUE      ?= 180s
+ARGOCD_TIMEOUT_HARD_RECONCILIATION_KEY   ?= timeout.hard.reconciliation
+ARGOCD_TIMEOUT_HARD_RECONCILIATION_VALUE ?= 0
 
 # -----------------------------------------------------------------
 .PHONY : k8s-get-pods-in-argocd-namespace
@@ -242,6 +255,80 @@ access-argocd-server-ui-and-do-initial-configuration:
 	$(MAKE)	-f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-login-argocd-server-via-cli
 	#$(MAKE)	-f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-delete-initial-password-after-reset
 
+.PHONY : make-argocd-installation-production-ready-by-hardening-installation
+make-argocd-installation-production-ready-by-hardening-installation: ## Harden the ArgoCD Installation
+	@printf '$(YELLOW)%s$(RESET)\n' "Harden the ArgoCD installation"
+	@printf '$(YELLOW)%s$(RESET)\n' \
+		"The default ArgoCD install is not production-ready." \
+		"These changes matter even in a learning environment because you should learn the right habits."
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-disable-insecure-mode-of-argocd-server-by-applying-patch
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-set-resource-tracking-method-to-annotation-by-applying-patch
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-configure-resource-health-checks-timeout-by-applying-patch
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-restart-argocd-server-to-pick-up-config-changes-by-applying-patch
+
+.PHONY : k8s-disable-insecure-mode-of-argocd-server-by-applying-patch
+k8s-disable-insecure-mode-of-argocd-server-by-applying-patch: ## Patch ArgoCD server to disable insecure mode
+	@printf '$(YELLOW)%s$(RESET)\n' "Patch ArgoCD server to disable insecure mode."
+	@printf '$(YELLOW)%s$(RESET)\n' \
+		"In production you would have a proper TLS cert — here we configure it correctly" \
+		"even if the cert is self-signed."
+	kubectl patch configmap $(ARGOCD_CMD_PARAMS_CM) -n $(K8S_ARGOCD_NAMESPACE) \
+		--type merge \
+		-p '{"data":{"$(ARGOCD_SERVER_INSECURE_KEY)":"$(ARGOCD_SERVER_INSECURE_VALUE)"}}'
+
+# Why annotation is better
+# Argo CD needs a reliable way to remember “this live object belongs to that Application.” 
+# With label-based tracking, Argo CD adds an identifying label, but labels are part of 
+# Kubernetes metadata that can be used by selectors, so a label collision can create 
+# unexpected behavior in Services, Deployments, or other label-driven controllers. 
+# With annotation-based tracking, Argo CD writes tracking data into annotations, which 
+# Kubernetes ignores for selection logic, so it is less likely to interfere with your app’s 
+# functional labels.
+
+# A practical example: suppose your Service selects pods with app=api. If Argo CD also used 
+# a label with the same key or if a label strategy collided with your app labels, you could 
+# accidentally change which pods the Service routes to. An annotation does not affect that 
+# selector at all, so your routing stays driven only by your intended labels.
+
+# What changes in multi-cluster setups
+# Annotation-based tracking is also useful when you have multiple Argo CD instances or a larger 
+# fleet because the tracking metadata is less likely to conflict with labels used by application 
+# logic or platform policy. Argo CD can still determine ownership, but without forcing extra label 
+# semantics into the resource-selection path. That is why many newer Argo CD setups prefer 
+# annotation-based tracking as the default direction
+.PHONY : k8s-set-resource-tracking-method-to-annotation-by-applying-patch
+k8s-set-resource-tracking-method-to-annotation-by-applying-patch: ## Set resource tracking method to annotation (more reliable than label)
+	@printf '$(YELLOW)%s$(RESET)\n' "Set resource tracking method to annotation (more reliable than label)."
+	@printf '$(YELLOW)%s$(RESET)\n' "This is how ArgoCD marks resources it manages."
+	@printf '$(YELLOW)%s$(RESET)\n' \
+		'application.resourceTrackingMethod: annotation' \
+		'tells Argo CD to identify the live resources it owns' \
+		'using annotations instead of relying only on labels'
+
+	kubectl patch configmap $(ARGOCD_MAIN_CM) -n $(K8S_ARGOCD_NAMESPACE) \
+		--type merge \
+		-p '{"data":{"$(ARGOCD_RESOURCE_TRACKING_KEY)":"$(ARGOCD_RESOURCE_TRACKING_VALUE)"}}'
+
+.PHONY : k8s-configure-resource-health-checks-timeout-by-applying-patch
+k8s-configure-resource-health-checks-timeout-by-applying-patch: ## Configure resource health checks timeout
+	@printf '$(YELLOW)%s$(RESET)\n' "Configure resource health checks timeout."
+	kubectl patch configmap $(ARGOCD_MAIN_CM) -n $(K8S_ARGOCD_NAMESPACE) \
+		--type merge \
+		-ps '{"data":{"$(ARGOCD_TIMEOUT_RECONCILIATION_KEY)":"$(ARGOCD_TIMEOUT_RECONCILIATION_VALUE)","$(ARGOCD_TIMEOUT_HARD_RECONCILIATION_KEY)":"$(ARGOCD_TIMEOUT_HARD_RECONCILIATION_VALUE)"}}'
+
+.PHONY : k8s-restart-argocd-server-to-pick-up-config-changes-by-applying-patch
+k8s-restart-argocd-server-to-pick-up-config-changes-by-applying-patch: ## Restart ArgoCD server to pick up config changes
+	@printf '$(YELLOW)%s$(RESET)\n' "Restart ArgoCD server to pick up config changes."
+	@printf '$(YELLOW)%s$(RESET)\n' \
+		'Practical flow ' \
+		'If you patch Argo CD ConfigMaps and then restart the server, the sequence is:' \
+		'	- You change Argo CD config.' \
+		'	- You restart the Deployment so the running pod picks up the new config.' \
+		'	- Kubernetes replaces the old pod with a new one in a rolling way.' \
+		'	- rollout status blocks until the rollout is healthy.'
+
+	kubectl rollout restart deployment/$(ARGOCD_SERVER_DEPLOYMENT) -n $(K8S_ARGOCD_NAMESPACE)
+	kubectl rollout status deployment/$(ARGOCD_SERVER_DEPLOYMENT) -n $(K8S_ARGOCD_NAMESPACE)
 
 
 
