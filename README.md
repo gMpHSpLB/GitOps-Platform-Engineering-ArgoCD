@@ -10,8 +10,8 @@ The platform team designs and owns the delivery infrastructure. Developer teams 
 
 ## More Details, please check below:
 
-[Gitops](t03-argocd/README-ArgoCD.md)
+[Gitops](./README-ArgoCD.md)
 
-[ArgoCD](t03-argocd/README-How-Enterprise-Team_Works.md)
+[ArgoCD](./README-How-Enterprise-Team_Works.md)
 
-[How Enterprise Works](t03-argocd/README-How-Enterprise-Team_Works.md) 
+[How Enterprise Works](./README-How-Enterprise-Team_Works.md) 
