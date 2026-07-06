@@ -14,4 +14,6 @@ The platform team designs and owns the delivery infrastructure. Developer teams 
 
 [ArgoCD](./README-ArgoCD.md)
 
+[Resource Relationship](./README-Resource-Relationship.md)
+
 [How Enterprise Works](./README-How-Enterprise-Team_Works.md) 
