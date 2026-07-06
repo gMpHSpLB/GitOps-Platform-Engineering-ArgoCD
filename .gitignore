@@ -1,0 +1,6 @@
+.secrets
+.env
+dist/
+downloads/
+*.tgz
+bin/*

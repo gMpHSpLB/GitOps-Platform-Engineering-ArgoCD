@@ -1,0 +1,249 @@
+# Use Bash for shell commands in recipes.
+# This gives us better shell features than plain sh.
+SHELL := /bin/bash
+
+# Default target
+.DEFAULT_GOAL := help
+.PHONY: help
+# Self-documenting help: list targets with "##" comments
+help: ## Show all available targets with short descriptions.
+	# This target reads the Makefile and prints any line ending with ##.
+	# Use this when you want to discover available commands quickly.
+	# Expected output: a list of targets and one-line descriptions.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make <target>\n\nTargets:\n"} /^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-28s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+.PHONY: 
+# ---------- GLOBAL CONFIG --------------------------------------
+RED    := \033[1;31m
+YELLOW := \033[1;33m
+GREEN  :="\033[1;32m"
+CYAN   := \033[1;36m
+RESET  := \033[0m
+
+ARGOCD_CLI_INSTALLER_URL 		?= https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+ARGOCD_CLI_TOOL 				?= bin/argocd
+
+# Set ARGOCD_SERVER to the service, not localhost
+ARGOCD_PORT 					?= 8080
+ARGOCD_SERVER_URL				?= localhost:$(ARGOCD_PORT)
+ARGOCD_USERNAME 				?= admin
+ARGOCD_ADMIN_PASSWORD			?= admin123
+# For local dev, we often disable TLS verification for the CLI.
+ARGOCD_INSECURE 				?= true
+ARGOCD_PF_LOG 					?= /tmp/argocd-port-forward.log
+ARGOCD_PF_PID 					?= /tmp/argocd-port-forward.pid
+# ---------- APP NAMESPACES PER ENV ------------------------
+K8S_ARGOCD_NAMESPACE 			?= argocd
+ARGOCD_MANIFEST_URL 			?= https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+
+
+# -----------------------------------------------------------------
+.PHONY : k8s-get-pods-in-argocd-namespace
+k8s-get-pods-in-argocd-namespace:
+	@printf '$(YELLOW) %s $(RESET) \n' \
+		'Get pods in namespace: $(K8S_ARGOCD_NAMESPACE)'
+	kubectl get pods -n $(K8S_ARGOCD_NAMESPACE)
+
+# .PHONY : install_argocd_on_minikube
+# install_argocd_on_minikube:
+# 	@kubectl get deploy argocd-server -n $(K8S_ARGOCD_NAMESPACE) >/dev/null 2>&1 && \
+# 		echo "ArgoCD is already installed and running. Skipping install." && \
+# 		exit 0 || true
+# 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-create-namespace
+# 	@printf '$(GREEN) %s $(RESET) \n' \
+# 		'Install: This is $(ARGOCD_MANIFEST_URL)' \
+# 		'the stable release — not the core install (core install has no UI)'
+# 	kubectl apply -n $(K8S_ARGOCD_NAMESPACE) \
+# 		--server-side --force-conflicts \
+# 		-f $(ARGOCD_MANIFEST_URL)
+
+# 	@echo "Watch components come up — all must be Running"
+# 	# Expected components:
+# 	# argocd-application-controller-0          (StatefulSet)
+# 	# argocd-applicationset-controller-xxx     (Deployment)
+# 	# argocd-dex-server-xxx                    (Deployment)
+# 	# argocd-notifications-controller-xxx      (Deployment)
+# 	# argocd-redis-xxx                         (Deployment)
+# 	# argocd-repo-server-xxx                   (Deployment)
+# 	# argocd-server-xxx                        (Deployment)
+
+# 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-get-pods-in-argocd-namespace
+
+# 	@printf '$(GREEN) %s $(RESET) \n' \
+# 		'7 components Expected:' \
+# 		'----------------------' \
+# 		'Component					What it does				Required' \
+# 		'application-controller	The sync engine — the core of ArgoCD			Yes' \
+# 		'repo-server			Renders Helm/Kustomize manifests in isolation		Yes' \
+# 		'server			API + UI. Handles logins, sync requests			Yes' \
+# 		'dex-server			SSO/OIDC integration					No (but installed by default)' \
+# 		'redis			Caches rendered manifests, reduces repo-server load	Yes' \
+# 		'applicationset-controller	Manages ApplicationSet resources			Yes' \
+# 		'notifications-controller	Sends Slack/email alerts on sync events			No' \
+
+# 	@printf '$(GREEN) %s $(RESET) \n' \
+# 		'Wait for all pods to be Ready'
+# 	kubectl wait --for=condition=Ready pods \
+# 		--all \
+# 		-n $(K8S_ARGOCD_NAMESPACE) \
+# 		--timeout=300s || echo "Warning: ArgoCD pods not all Ready within timeout; will continue and check status."
+
+.PHONY: k8s-argocd-create-namespace
+k8s-argocd-create-namespace:
+	@printf '$(YELLOW) %s $(RESET) \n' \
+		'Ensuring ArgoCD namespace exists: $(K8S_ARGOCD_NAMESPACE)'
+	@kubectl create namespace $(K8S_ARGOCD_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+
+.PHONY: k8s-argocd-install
+k8s-argocd-install: k8s-argocd-create-namespace
+	@printf '$(YELLOW)%s$(RESET)\n' \
+		'Installing ArgoCD from $(ARGOCD_MANIFEST_URL)' \
+		'Stable release manifest (not core install; core has no UI)'
+	@kubectl apply -n $(K8S_ARGOCD_NAMESPACE) \
+		--server-side --force-conflicts \
+		-f $(ARGOCD_MANIFEST_URL)
+
+	@echo "Watch components come up — all must be Running"
+	# Expected components:
+	# argocd-application-controller-0          (StatefulSet)
+	# argocd-applicationset-controller-xxx     (Deployment)
+	# argocd-dex-server-xxx                    (Deployment)
+	# argocd-notifications-controller-xxx      (Deployment)
+	# argocd-redis-xxx                         (Deployment)
+	# argocd-repo-server-xxx                   (Deployment)
+	# argocd-server-xxx                        (Deployment)
+
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-get-pods-in-argocd-namespace
+
+	@printf '$(GREEN) %s $(RESET) \n' \
+		'7 components Expected:' \
+		'----------------------' \
+		'Component					What it does				Required' \
+		'application-controller	The sync engine — the core of ArgoCD			Yes' \
+		'repo-server			Renders Helm/Kustomize manifests in isolation		Yes' \
+		'server			API + UI. Handles logins, sync requests			Yes' \
+		'dex-server			SSO/OIDC integration					No (but installed by default)' \
+		'redis			Caches rendered manifests, reduces repo-server load	Yes' \
+		'applicationset-controller	Manages ApplicationSet resources			Yes' \
+		'notifications-controller	Sends Slack/email alerts on sync events			No' \
+
+.PHONY: k8s-argocd-verify
+k8s-argocd-verify:
+	@printf '$(YELLOW) %s $(RESET) \n' \
+		'Waiting for ArgoCD pods to become Ready'
+	@kubectl wait --for=condition=Ready pods \
+		--all \
+		-n $(K8S_ARGOCD_NAMESPACE) \
+		--timeout=300s || echo "Warning: ArgoCD pods not all Ready within timeout; will continue and check status."
+	@kubectl get pods -n $(K8S_ARGOCD_NAMESPACE)
+
+.PHONY: install_argocd_on_minikube
+install_argocd_on_minikube:
+	@printf '$(YELLOW) %s $(RESET) \n' \
+		'Check ArgoCD Server is already installed?'
+	@if kubectl get deploy argocd-server -n $(K8S_ARGOCD_NAMESPACE) >/dev/null 2>&1; then \
+		printf '$(GREEN) %s $(RESET) \n' \
+			'ArgoCD is already installed and running. Skipping install, but verify status'; \
+		$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-verify; \
+	else \
+		$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-install; \
+		$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-verify; \
+	fi
+
+.PHONY : k8s-argocd-expose-argocd-server-to-localaccess
+k8s-argocd-expose-argocd-server-to-localaccess: ## Expose argocd server for local access
+	@printf '$(YELLOW) %s $(RESET) \n' \
+		'ArgoCD server is ClusterIP by default — expose it for local access'
+	@printf '$(YELLOW) %s $(RESET)\n' \
+		'Starting port-forward in the background' \
+		"Access via: $(ARGOCD_SERVER_URL) " \
+ 		'Ignore the self-signed cert warning in your browser '
+	@if lsof -i :$(ARGOCD_PORT) >/dev/null 2>&1; then \
+		printf '$(GREEN) %s $(RESET)\n' "Port $(ARGOCD_PORT) is already in use. Reusing existing port-forward or stop it first."; \
+	else \
+		printf '$(YELLOW) %s $(RESET)\n' 'Starting port-forward in the background'; \
+		kubectl port-forward svc/argocd-server -n $(K8S_ARGOCD_NAMESPACE) $(ARGOCD_PORT):443 > $(ARGOCD_PF_LOG) 2>&1 & \
+		echo $$! > $(ARGOCD_PF_PID); \
+	fi
+
+.PHONY : k8s-argocd-get-initial-admin-password
+k8s-argocd-get-initial-admin-password:
+	@printf '$(YELLOW) %s $(RESET)\n' \
+		'Get the initial admin password' \
+		'It is stored in a Secret and auto-generated during install'; \
+	ARGOCD_PASSWORD=$$(kubectl get secret argocd-initial-admin-secret -n $(K8S_ARGOCD_NAMESPACE) -o jsonpath='{.data.password}' | base64 --decode); \
+	printf '$(GREEN) %s %s $(RESET)\n' 'Admin password:' "$$ARGOCD_PASSWORD"
+
+.PHONY: k8s-argocd-install-argocd-cli-tool
+k8s-argocd-install-argocd-cli-tool:
+	@if [ -x "$(ARGOCD_CLI_TOOL)" ]; then  \
+		printf '$(GREEN) %s $(RESET)\n' "$(ARGOCD_CLI_TOOL) already installed; skipping download."; \
+		$(ARGOCD_CLI_TOOL) version --client; \
+	else \
+		printf '$(YELLOW) %s $(RESET)\n' "Installing the ArgoCD CLI tool"; \
+		mkdir -p ./bin; \
+		curl -sSL -o $(ARGOCD_CLI_TOOL) "$(ARGOCD_CLI_INSTALLER_URL)"; \
+		chmod +x $(ARGOCD_CLI_TOOL); \
+		printf '$(YELLOW) %s $(RESET)\n' "Verify argocd CLI is installed, check version"; \
+		$(ARGOCD_CLI_TOOL) version --client; \
+	fi
+
+.PHONY: k8s-argocd-login-argocd-server-via-cli
+k8s-argocd-login-argocd-server-via-cli:
+	@if [ -n "$(ARGOCD_ADMIN_PASSWORD)" ]; then \
+		PASS="$(ARGOCD_ADMIN_PASSWORD)"; \
+	else \
+		PASS="$$(kubectl -n $(K8S_ARGOCD_NAMESPACE) get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo)"; \
+	fi; \
+	$(ARGOCD_CLI_TOOL) login $(ARGOCD_SERVER_URL) \
+		--username $(ARGOCD_USERNAME) \
+		--password "$$PASS" \
+		--insecure
+
+.PHONY: k8s-argocd-change-argocd-server-admin-password
+k8s-argocd-change-argocd-server-admin-password:
+	@printf '$(YELLOW)%s$(RESET)\n' "Change the default password immediately"
+	@printf '$(YELLOW)%s$(RESET)\n' "Using the default password beyond first login is a security risk"
+
+	@INITIAL_PASS="$$(kubectl get secret argocd-initial-admin-secret \
+		-n $(K8S_ARGOCD_NAMESPACE) \
+		-o jsonpath='{.data.password}' | base64 --decode)"; \
+	if [ -z "$$INITIAL_PASS" ]; then \
+		printf '$(GREEN)%s$(RESET)\n' "Initial admin password secret not found or empty; assuming password was already changed."; \
+		exit 0; \
+	fi; \
+	echo "Checking if initial admin password is still valid..."; \
+	if $(ARGOCD_CLI_TOOL) login "$(ARGOCD_SERVER_URL)" \
+		--username "$(ARGOCD_USERNAME)" \
+		--password "$$INITIAL_PASS" \
+		--insecure >/dev/null 2>&1; then \
+		printf '$(GREEN)%s$(RESET)\n' "Initial password still valid. Updating password..."; \
+		$(ARGOCD_CLI_TOOL) account update-password \
+			--current-password "$$INITIAL_PASS" \
+			--new-password "admin123"; \
+		printf '$(GREEN)%s$(RESET)\n' "New password set: admin123"; \
+		echo "Optionally delete argocd-initial-admin-secret to prevent reuse."; \
+	else \
+		printf '$(GREEN)%s$(RESET)\n' "Initial password no longer valid; skipping password change."; \
+	fi
+
+.PHONY : k8s-argocd-delete-initial-password-after-reset
+k8s-argocd-delete-initial-password-after-reset:
+	@printf '$(YELLOW) %s $(RESET)\n' "The initial secret is now stale — delete it"
+	kubectl delete secret argocd-initial-admin-secret -n $(K8S_ARGOCD_NAMESPACE)
+
+.PHONY : access-server-argocd-ui-and-do-initial-configuration
+access-argocd-server-ui-and-do-initial-configuration:
+	$(MAKE)	-f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-expose-argocd-server-to-localaccess
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-get-initial-admin-password
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-install-argocd-cli-tool
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-change-argocd-server-admin-password	
+	$(MAKE)	-f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-login-argocd-server-via-cli
+	#$(MAKE)	-f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-delete-initial-password-after-reset
+
+
+
+
+
+
