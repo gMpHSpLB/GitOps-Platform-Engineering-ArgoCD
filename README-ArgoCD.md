@@ -1,17 +1,6 @@
 # Project: 
 ### "GitOps Platform Engineering: Operating a Production ArgoCD Instance with Application Lifecycle Management, Drift Detection, and Sync Strategy Control"
 
-## What GitOps Means
-GitOps is an operational model where the desired state of every system is declared in Git, and an automated agent continuously ensures the actual state converges to the desired state. It is not a tool — it is a set of principles. ArgoCD is an implementation of those principles for Kubernetes.
-The four GitOps principles (OpenGitOps 1.0.0):
-1.	Declarative: The entire system is described declaratively
-2.	Versioned and immutable: Desired state is stored in a way that enforces immutability and versioning
-3.	Pulled automatically: Software agents automatically pull the desired state declarations
-4.	Continuously reconciled: Software agents continuously observe actual system state and attempt to apply the desired state
-
-### Desired State vs Actual State
-
-
 ## The ArgoCD architecture 
 ```console
 argocd-server                   → UI and API server. Handles user/CI requests.
@@ -24,6 +13,7 @@ argocd-dex-server               → OIDC provider for SSO integration.
 ```
 ### ArgoCD architecture diagram
 <img width="2760" height="3440" alt="t03_argocd_architecture" src="https://github.com/user-attachments/assets/4351799a-9d9e-46ac-9761-343090dc88c2" />
+
 ## How Resources Connect in Practice: In a Helm + ArgoCD workflow
 ```console
 Developer writes code
