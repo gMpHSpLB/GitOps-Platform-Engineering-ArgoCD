@@ -1,6 +1,6 @@
 # Project: 
-### GitOps Platform Engineering: Operating a Production ArgoCD Instance 
-### with Application Lifecycle Management, Drift Detection, and Sync Strategy Control"
+### "GitOps Platform Engineering: Operating a Production ArgoCD Instance with Application Lifecycle Management, 
+Drift Detection, and Sync Strategy Control"
 
 ## The ArgoCD architecture 
 ```console
