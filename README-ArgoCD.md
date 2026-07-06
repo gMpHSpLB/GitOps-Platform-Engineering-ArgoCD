@@ -1,4 +1,4 @@
-## Operating a Production ArgoCD Instance with Application Lifecycle Management
+# Operating a Production ArgoCD Instance with Application Lifecycle Management
 
 ## The ArgoCD architecture 
 ```console
