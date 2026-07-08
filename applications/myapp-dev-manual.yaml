@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: myapp-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/gMpHSpLB/Gitops-Argocd.git
+    targetRevision: HEAD
+    path: charts/myapp
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+      releaseName: myapp-dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: myapp-dev
+  # NO syncPolicy.automated block = manual sync only
+  # ArgoCD detects drift but does NOT auto-apply
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - Validate=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

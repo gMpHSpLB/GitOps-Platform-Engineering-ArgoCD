@@ -1,0 +1,35 @@
+# This is an EXAMPLE showing the annotation pattern
+# Add these annotations to your actual template files
+
+# Wave 0: Prerequisites (namespace labels, RBAC, ConfigMaps)
+# In templates/configmap.yaml, add to metadata.annotations:
+# argocd.argoproj.io/sync-wave: "0"
+
+# Wave 1: Core workloads
+# In templates/deployment.yaml, add to metadata.annotations:
+# argocd.argoproj.io/sync-wave: "1"
+
+# Wave 2: Traffic resources (only after pods are healthy)
+# In templates/service.yaml:
+# argocd.argoproj.io/sync-wave: "2"
+
+# Wave 3: Ingress (only after Service exists)
+# In templates/ingress.yaml:
+# argocd.argoproj.io/sync-wave: "3"
+
+# Wave 5: Autoscaling (only after deployment is healthy)
+# In templates/hpa.yaml:
+# argocd.argoproj.io/sync-wave: "5"
+
+# In _helpers.tpl, add a default wave value:
+# charts/myapp/templates/_helpers.tpl << 'EOF'
+
+# {{/*
+# Sync wave for ArgoCD resource ordering.
+# Default is 1 (after prerequisites).
+# Override per-resource in each template.
+# */}}
+# {{- define "myapp.syncWave" -}}
+# {{- default "1" .Values.syncWave }}
+# {{- end }}
+# EOF

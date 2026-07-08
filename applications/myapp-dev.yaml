@@ -1,0 +1,85 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: myapp-dev
+  namespace: argocd
+  labels:
+    app: myapp
+    environment: dev
+  # finalizer ensures ArgoCD cleans up managed resources when Application is deleted
+  # Without this, deleting the Application leaves orphaned resources in the cluster
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # The ArgoCD project this Application belongs to
+  # 'default' project allows access to any namespace — fine for learning
+  # In production, create a dedicated project with RBAC (T-13)
+  project: default
+
+  # ── SOURCE ─────────────────────────────────────────────────────────
+  source:
+    # The Git repository to watch
+    repoURL: https://github.com/gMpHSpLB/Gitops-Argocd.git
+    # The branch/tag/commit SHA to track
+    # Production: use a specific tag or SHA, not a mutable branch
+    targetRevision: HEAD
+    # Path within the repo to the Helm chart
+    path: charts/myapp
+
+    # Helm-specific source configuration
+    helm:
+      # Which values files to use (relative to chart path)
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+      # Dynamic values injected at sync time — same as helm upgrade --set
+      # Use sparingly — prefer values files for auditability
+      parameters:
+        - name: environment
+          value: dev
+        - name: image.tag
+          value: "1.25-alpine"
+      # Release name (defaults to Application name if not set)
+      releaseName: myapp-dev
+
+  # ── DESTINATION ────────────────────────────────────────────────────
+  destination:
+    # In-cluster reference for the cluster ArgoCD is running in
+    server: https://kubernetes.default.svc
+    namespace: myapp-dev
+
+  # ── SYNC POLICY ────────────────────────────────────────────────────
+  syncPolicy:
+    # automated: ArgoCD syncs automatically when drift is detected
+    # Comment this out for manual sync (production pattern for first deploy)
+    automated:
+      # prune: delete resources from cluster that are removed from Git
+      # DANGER: without this, removing a manifest from Git does NOT delete
+      # the resource from the cluster — it just becomes unmanaged
+      prune: true
+      # selfHeal: re-sync if someone makes a manual kubectl change
+      # This is what enforces Git as the source of truth
+      selfHeal: true
+      # allowEmpty: allow sync to proceed even if rendered manifests are empty
+      # Leave false — empty sync usually means a template error
+      allowEmpty: false
+
+    syncOptions:
+      # Create the namespace if it doesn't exist during sync
+      - CreateNamespace=true
+      # Validate manifests against API schema before applying
+      - Validate=true
+      # Apply only changed resources (not all resources on every sync)
+      # Significantly reduces API server load in large deployments
+      - ApplyOutOfSyncOnly=true
+      # Use server-side apply (kubectl apply --server-side)
+      # More reliable for large resources and CRDs
+      - ServerSideApply=true
+
+    # Retry failed syncs automatically
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
