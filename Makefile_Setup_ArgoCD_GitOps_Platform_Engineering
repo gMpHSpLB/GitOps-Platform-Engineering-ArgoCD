@@ -6,6 +6,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 .PHONY: help #- Show all available targets with short descriptions.
+.PHONY: k8s-argocd-check-argocd-server-accessible
 .PHONY: k8s-argocd-expose-argocd-server-to-localaccess #- Expose argocd server for local access
 .PHONY: k8s-disable-insecure-mode-of-argocd-server-by-applying-patch #- Patch ArgoCD server to disable insecure mode
 .PHONY: k8s-set-resource-tracking-method-to-annotation-by-applying-patch #- Set resource tracking method to annotation (more reliable than label)
@@ -129,19 +130,43 @@ install_argocd_on_minikube:
 		$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-verify; \
 	fi
 
-k8s-argocd-expose-argocd-server-to-localaccess: ## Expose argocd server for local access
-	@printf '$(YELLOW) %s $(RESET) \n' \
-		'ArgoCD server is ClusterIP by default — expose it for local access'
+k8s-argocd-check-argocd-server-accessible:
 	@printf '$(YELLOW) %s $(RESET)\n' \
-		'Starting port-forward in the background' \
-		"Access via: $(ARGOCD_SERVER_URL) " \
- 		'Ignore the self-signed cert warning in your browser '
+		'Checking whether Argo CD server is reachable on local access port'
 	@if lsof -i :$(ARGOCD_PORT) >/dev/null 2>&1; then \
-		printf '$(GREEN) %s $(RESET)\n' "Port $(ARGOCD_PORT) is already in use. Reusing existing port-forward or stop it first."; \
+		if curl -sk https://127.0.0.1:$(ARGOCD_PORT)/healthz >/dev/null 2>&1; then \
+			printf '$(GREEN) %s $(RESET)\n' \
+				"Argo CD server is reachable on localhost:$(ARGOCD_PORT)"; \
+		else \
+			printf '$(YELLOW) %s $(RESET)\n' \
+				"Port $(ARGOCD_PORT) is open, but Argo CD is not responding. Restarting port-forward."; \
+			$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-expose-argocd-server-to-localaccess; \
+		fi; \
+	else \
+		printf '$(YELLOW) %s $(RESET)\n' \
+			"Argo CD server is not reachable on localhost:$(ARGOCD_PORT)"; \
+		$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-expose-argocd-server-to-localaccess; \
+	fi
+
+k8s-argocd-expose-argocd-server-to-localaccess: ## Expose argocd server for local access
+	@printf '$(YELLOW) %s $(RESET)\n' \
+		'ArgoCD server is ClusterIP by default — exposing it for local access'
+	@if lsof -i :$(ARGOCD_PORT) >/dev/null 2>&1; then \
+		printf '$(GREEN) %s $(RESET)\n' \
+			"Port $(ARGOCD_PORT) is already in use. Reusing existing port-forward or stop it first."; \
 	else \
 		printf '$(YELLOW) %s $(RESET)\n' 'Starting port-forward in the background'; \
 		kubectl port-forward svc/argocd-server -n $(K8S_ARGOCD_NAMESPACE) $(ARGOCD_PORT):443 > $(ARGOCD_PF_LOG) 2>&1 & \
 		echo $$! > $(ARGOCD_PF_PID); \
+		sleep 3; \
+		if curl -sk https://127.0.0.1:$(ARGOCD_PORT)/healthz >/dev/null 2>&1; then \
+			printf '$(GREEN) %s $(RESET)\n' \
+				"Argo CD is now reachable on localhost:$(ARGOCD_PORT)"; \
+		else \
+			printf '$(RED) %s $(RESET)\n' \
+				"Port-forward started but Argo CD is still not reachable"; \
+			exit 1; \
+		fi; \
 	fi
 
 k8s-argocd-get-initial-admin-password:
@@ -171,7 +196,7 @@ k8s-argocd-install-argocd-cli-tool:
 		$(ARGOCD_CLI_TOOL) version --client; \
 	fi
 
-k8s-argocd-login-argocd-server-via-cli:
+k8s-argocd-login-argocd-server-via-cli: k8s-argocd-check-argocd-server-accessible
 	@if [ -n "$(ARGOCD_ADMIN_PASSWORD)" ]; then \
 		PASS="$(ARGOCD_ADMIN_PASSWORD)"; \
 	else \
@@ -321,8 +346,3 @@ register-public-github-repo-as-gitops-source-with-argocd: k8s-argocd-login-argoc
 	$(ARGOCD_CLI_TOOL) repo add https://github.com/gMpHSpLB/Gitops-Argocd.git --name $(GITOPS_SOURCE_PROJECT)
 	@printf '$(YELLOW) %s $(RESET) \n' 'Verify the connection'
 	$(ARGOCD_CLI_TOOL) repo list
-
-
-
-
-

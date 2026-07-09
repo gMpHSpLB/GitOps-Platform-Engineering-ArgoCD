@@ -82,7 +82,7 @@ ensure-minikube: ## Start minikube only if the cluster is not ready.
 	@set -e; \
 	if ! minikube status -p $(MINIKUBE_PROFILE) 2>/dev/null | grep -q "apiserver: Running"; then \
 	    echo "Minikube not ready, starting..."; \
-        $(MAKE) start-minikube; \
+        $(MAKE) -f Makefile_Setup start-minikube; \
     fi
 
 # Verify the cluster is running

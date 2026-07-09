@@ -12,7 +12,11 @@ RESET  := \033[0m
 .PHONY: setup-minikube #- Ensure Minikube cluster is running with correct profile
 .PHONY: setup-argocd 
 .PHONY: create-argocd-dev-application-and-status-check # Create ArgoCD Application in dev environment and check status
-
+.PHONY: check-both-status-dimensions-sync-and-health-for-dev-application
+.PHONY: understand-gitops-in-argocd-with-drift-detection
+.PHONY: understand-sync-mode-strategies-for-dev-satging-and-prod-environment
+.PHONY: understand-sync-waves-and-how-to-handle-resource-order
+.PHONY: understand-app-of-apps-pattern-one-root-application-manages-other-applications
 
 # Self-documenting help: list targets with "##" comments
 help: ## Show all available targets with short descriptions.
@@ -87,7 +91,7 @@ create-argocd-dev-application-and-status-check: ## Create ArgoCD Application in 
 		' 		- Where is the desired state? (Git repo + path + revision) ' \
 		' 		- Where should it be deployed? (cluster + namespace) ' \
 		' 		- How should it be rendered? (Helm, Kustomize, plain YAML) ' \
-		' 		- What sync policy? (manual or automated)' \
+		' 		- What sync policy? (manual or automated)'; \
 	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue..."; \
 	read -r _
 
@@ -97,17 +101,18 @@ create-argocd-dev-application-and-status-check: ## Create ArgoCD Application in 
 		' 		- Step 1.2. Add two labels to dev and staging namespaces associated with env and ownerteam ' \
 		' 		- Step 2. Apply Dev argocd application to cluster' \
 		' 		- Step 3. Watch Status-of-dev-argocd-application-in-argocd-namespace' \
-		' 		- Step 4. Get Detailed-status-of-dev-argocd-application \
-		' 		- Step 5. See Resources-Argocd-created-for-dev-argocd-application \
-		' 		- Step 6. See Diff-between-desired-and-actual-for-dev-argocd-application; \				
+		' 		- Step 4. Get Detailed-status-of-dev-argocd-application' \
+		' 		- Step 5. See Resources-Argocd-created-for-dev-argocd-application' \
+		' 		- Step 6. See Diff-between-desired-and-actual-for-dev-argocd-application'; \
 	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue..."; \
 	read -r _
 
-	@printf '$(CYAN) %s $(RESET) \n' 
+	@printf '$(CYAN) %s $(RESET) \n' \
 		'Step 1. Create namespace where argocd application deploy in dev and staging environment' \
-		'	Step 1.1. Add two labels to dev and staging namespaces associated with env and ownerteam'; \		
+		'	Step 1.1. Add two labels to dev and staging namespaces associated with env and ownerteam'; \
 	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to run Step 1 and 1.1...";  \
 	read -r _
+
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications k8s-create-namespace-where-argocd-application-deploy-in-dev-environment
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications k8s-add-two-labels-to-dev-namespace-associated-with-env-and-ownerteam
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications k8s-create-namespace-where-argocd-application-deploy-in-staging-environment
@@ -138,23 +143,19 @@ create-argocd-dev-application-and-status-check: ## Create ArgoCD Application in 
 	read -r _
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications k8s-see-diff-between-desired-and-actual-for-dev-argocd-application
 
-.PHONY: check-both-status-dimensions-sync-and-health-for-dev-application
+
 check-both-status-dimensions-sync-and-health-for-dev-application:
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications review-argocd-dev-application-two-status-dimensions-sync-and-health
 
-.PHONY: understand-gitops-in-argocd-with-drift-detection
 understand-gitops-in-argocd-with-drift-detection:
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications explore-drift-detection-to-understand-gitops-in-argocd
 
-.PHONY: understand-sync-mode-strategies-for-dev-satging-and-prod-environment
 understand-sync-mode-strategies-for-dev-satging-and-prod-environment:
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications explore-sync-strategies-when-to-use-each-mode
 
-.PHONY : undersatand-sync-waves-and-how-to-handle-resource-order
-undersatand-sync-waves-and-how-to-handle-resource-order:
+understand-sync-waves-and-how-to-handle-resource-order:
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications explore-sync-waves-handle-resource-order-when-resource-A-depends-on-resource-B-etc
 
-.PHONY: understand-app-of-apps-pattern-one-root-application-manages-other-applications
 understand-app-of-apps-pattern-one-root-application-manages-other-applications:
 	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Applications explore-app-of-apps-pattern-one-root-application-manages-other-applications
 

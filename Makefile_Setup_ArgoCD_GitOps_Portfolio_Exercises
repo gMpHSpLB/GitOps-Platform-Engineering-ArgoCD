@@ -1,0 +1,357 @@
+# Use Bash for shell commands in recipes.
+# This gives us better shell features than plain sh.
+SHELL := /bin/bash
+
+# Default target
+.DEFAULT_GOAL := help
+.PHONY: help
+.PHONY: troubleshoot-comparisonerror-repository-is-not-reachable
+.PHONY: troubleshoot-application-outofsync-sync-fails-health-unknown
+.PHONY: troubleshoot-application-is-synced-but-pods-not-starting
+.PHONY: troubleshoot-application-shows-outofsync-but-argocd-app-diff-shows-no-difference
+.PHONY: troubleshoot-argocd-sync-deleted-resource-that-was-manually-created
+
+# Self-documenting help: list targets with "##" comments
+help: ## Show all available targets with short descriptions.
+	# This target reads the Makefile and prints any line ending with ##.
+	# Use this when you want to discover available commands quickly.
+	# Expected output: a list of targets and one-line descriptions.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make <target>\n\nTargets:\n"} /^[a-zA-Z0-9_.-]+:.*##/ { printf "  %-28s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+
+.PHONY: 
+# ---------- GLOBAL CONFIG --------------------------------------
+RED    := \033[1;31m
+YELLOW := \033[1;33m
+GREEN  :="\033[1;32m"
+CYAN   := \033[1;36m
+RESET  := \033[0m
+
+# ---------- ArgoCD ----------------------------------------------
+ARGOCD_CLI_INSTALLER_URL 				?= https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+ARGOCD_CLI_TOOL 						?= bin/argocd
+
+# Set ARGOCD_SERVER to the service, not localhost
+ARGOCD_PORT 							?= 8080
+ARGOCD_SERVER_URL						?= localhost:$(ARGOCD_PORT)
+ARGOCD_USERNAME 						?= admin
+ARGOCD_ADMIN_PASSWORD					?= admin123
+#Set to true in-case you want to delete the initial argocd server password
+DELETE_INITIAL_ARGOCD_ADMIN_PASSWORD	?= false
+# For local dev, we often disable TLS verification for the CLI.
+# Set to false if you want to disable insecure login
+DISABLE_INSECURE_PATCH 					?= true
+ARGOCD_INSECURE 						?= true
+ARGOCD_PF_LOG 							?= /tmp/argocd-port-forward.log
+ARGOCD_PF_PID 							?= /tmp/argocd-port-forward.pid
+
+K8S_ARGOCD_NAMESPACE 					?= argocd
+ARGOCD_MANIFEST_URL 					?= https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+ARGOCD_CMD_PARAMS_CM           			?= argocd-cmd-params-cm
+ARGOCD_MAIN_CM                 			?= argocd-cm
+ARGOCD_SERVER_DEPLOYMENT       			?= argocd-server
+
+ARGOCD_SERVER_INSECURE_KEY     			?= server.insecure
+ARGOCD_SERVER_INSECURE_VALUE   			?= false
+
+ARGOCD_RESOURCE_TRACKING_KEY   			?= application.resourceTrackingMethod
+ARGOCD_RESOURCE_TRACKING_VALUE 			?= annotation
+
+ARGOCD_TIMEOUT_RECONCILIATION_KEY        ?= timeout.reconciliation
+ARGOCD_TIMEOUT_RECONCILIATION_VALUE      ?= 180s
+ARGOCD_TIMEOUT_HARD_RECONCILIATION_KEY   ?= timeout.hard.reconciliation
+ARGOCD_TIMEOUT_HARD_RECONCILIATION_VALUE ?= 0
+
+GITOPS_SOURCE_PROJECT					 ?= Gitops-ArgoCD-Source
+
+# --------------- ArgoCD Application ------------------------------
+K8S_NAMESPACE_DEV 						?= myapp-dev
+K8S_NAMESPACE_STAGING					?= myapp-staging
+
+TEAM_WHO_OWNS_NAMESPACE					?= myapp
+
+ARGOCD_DEV_APPLICATION_FILE				?= applications/myapp-dev.yaml
+
+ARGOCD_DEV_APP_NAME						?= myapp-dev
+# 
+# ---------------------------------------------------------------------------------------------------------
+#										Troubleshooting Scenarios 
+#----------------------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------------------
+# Scenario 1 — ComparisonError: Repository Not Reachable
+# Symptom: Application shows Unknown sync status and health. argocd app get shows:
+# Message: rpc error: code = Unknown desc = error creating SSH agent:
+#         connection to agent failed
+# Systematic diagnosis:
+# 		Step 1: Check repo-server logs — it's the component that clones repos
+# 		Step 2: Check the repo registration
+# 		Step 3: Test the repo connection explicitly
+# ----------------------------------------------------------------------------------------------------------
+troubleshoot-comparisonerror-repository-is-not-reachable: ## Troubleshoot Repository Not Reachable, Application shows Unknown sync status and health.
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 1: Check repo-server logs — it's the component that clones repos"; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	kubectl logs -n $(K8S_ARGOCD_NAMESPACE) -l app.kubernetes.io/name=argocd-repo-server --tail=50
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 2: Check the repo registration" \
+		"	Look for: CONNECTION STATE = Failed";\
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) repo list
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 3: Test the repo connection explicitly with valid URL and permission" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) repo get https://github.com/gMpHSpLB/Gitops-Argocd.git
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 3.1: Test the repo connection explicitly with valid URL and invalid permission" \
+		"	URL : https://github.com/gMpHSpLB/Kubernetes_ArgoCD_Rollout_Observability" \
+		"	You will get Error: Permission denied error with below repo url" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	# $(ARGOCD_CLI_TOOL) repo get https://github.com/gMpHSpLB/Kubernetes_ArgoCD_Rollout_Observability
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 4: Check if it's an auth issue or network issue, below are some common errors:" \
+		"	+----------------------+-------------------+------------------------------+ " \
+		"	| Cause                | Signal            | Fix                          | " \
+		"	+----------------------+-------------------+------------------------------+ " \
+		"	| Wrong repo URL       | 404 in logs       | rm repo, re-add with correct | " \
+		"	|                      |                   | URL                          | " \
+		"	+----------------------+-------------------+------------------------------+ " \
+		"	| Expired PAT/token    | 401 in logs       | re-add repo with new PAT     | " \
+		"	+----------------------+-------------------+------------------------------+ " \
+		"	| Network policy block | Connection timeout | allow ArgoCD egress to      | " \
+		"	|                      |                   | GitHub IPs                   | " \
+		"	+----------------------+-------------------+------------------------------+ " \
+		"	| SSH key not added    | publickey denied  | use HTTPS or add deploy key  | " \
+		"	+----------------------+-------------------+------------------------------+ " \
+		"	| Wrong branch name    | ref not found     | fix targetRevision spelling  | " \
+		"	+----------------------+-------------------+------------------------------+ ";\
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+
+# ---------------------------------------------------------------------------------------------------------
+# Scenario 2 — SyncFailed: Helm Template Rendering Error
+# Symptom: Application is OutOfSync, sync fails immediately, health shows Unknown.
+# ---------------------------------------------------------------------------------------------------------
+
+troubleshoot-application-outofsync-sync-fails-health-unknown: ## Troubleshoot Helm Template Rendering Error, Application is OutOfSync, sync fails immediately, health shows Unknown. 
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 1: Get the sync operation details"; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) app get $(ARGOCD_DEV_APP_NAME) --show-operation
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 2: Get the full sync message"; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	kubectl get application $(ARGOCD_DEV_APP_NAME) -n $(K8S_ARGOCD_NAMESPACE) \
+  		-o jsonpath='{.status.operationState.message}'
+
+	@printf '\n $(CYAN) %s $(RESET) \n' \
+		"Step 3: Try to render the manifests manually" \
+		"		This reproduces what argocd-repo-server does" ;\
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue..."; \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) app manifests $(ARGOCD_DEV_APP_NAME)
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 4: If the above success and wants to check fails scenario," \
+		"then create typo error and try helm template directly" \
+		"Clone the repo"; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	cd /tmp && sudo rm -fr /tmp/test-repo && git clone https://github.com/gMpHSpLB/Gitops-Argocd.git /tmp/test-repo && cd -
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 5: You can replace .Values.resources with .Values.resourcez in myapp/templates/deployment.yaml " \
+		"And run helm template manually and check the error."; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	helm template $(ARGOCD_DEV_APP_NAME) /tmp/test-repo/charts/myapp \
+		-f /tmp/test-repo/charts/myapp/values-dev.yaml \
+			--debug 2>&1 | head -50
+	
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 6: Fix the type and render again and check. " \
+		"You can replace .Values.resourcez with .Values.resources in myapp/templates/deployment.yaml " \
+		"And run helm template manually and check the error." \
+		"Note: If you want to fix for ArgoCD then you have to fix , git commit , push and sync it" ;\
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	helm template $(ARGOCD_DEV_APP_NAME) /tmp/test-repo/charts/myapp \
+		-f /tmp/test-repo/charts/myapp/values-dev.yaml \
+			--debug 2>&1 | head -50
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Scenario 3 — OutOfSync But Diff Shows Nothing
+# Symptom: Application shows OutOfSync but argocd app diff myapp-dev shows no differences.
+# This is a well-known ArgoCD issue with several causes:
+# ---------------------------------------------------------------------------------------------------------
+troubleshoot-application-shows-outofsync-but-argocd-app-diff-shows-no-difference: ## Troubleshoot Application shows OutOfSync but argocd app diff myapp-dev shows no differences.
+	@printf '$(CYAN)%s$(RESET)\n' "Step 0: Ensure you are logged in to Argo CD"
+	@printf '$(CYAN)%s$(RESET)\n' "Press ENTER to continue..."
+	@read -r _
+	$(MAKE) -f Makefile_Setup_ArgoCD_GitOps_Platform_Engineering k8s-argocd-login-argocd-server-via-cli
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 1: Force a hard refresh — clears ArgoCD's manifest cache"; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) app get $(ARGOCD_DEV_APP_NAME) --hard-refresh
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 2: Check if the issue is with a specific resource"\
+		"		Look for resources with SYNC STATUS = OutOfSync";\
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";\
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) app resources $(ARGOCD_DEV_APP_NAME)
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 3: Check for known causes:" \
+		"Look for resources with SYNC STATUS = OutOfSync" \
+		" Cause A: Defaulted fields:	" \
+		" 	Kubernetes adds default values to objects after they're created "\
+		" 	(e.g., imagePullPolicy defaults to IfNotPresent if not set)" \
+		" 	ArgoCD sees these extra fields and considers it OutOfSync" \
+		" 	Fix: explicitly set the field in your chart to match Kubernetes default" \
+		" Cause B: Last-applied annotation mismatch: " \
+		" 	Happens when the resource was originally created by kubectl apply " \
+		" 	and now ArgoCD is trying to manage it	" ;\
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	kubectl get deployment $(ARGOCD_DEV_APP_NAME) -n $(K8S_NAMESPACE_DEV) \
+  		-o jsonpath='{.metadata.annotations.kubectl\.kubernetes\.io/last-applied-configuration}'
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Cause C: ServerSideApply field ownership conflict" \
+		"Multiple actors (Helm, kubectl, ArgoCD) managing the same field" \
+		"Fix: enable ServerSideApply sync option (already in your Application spec)	" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 4: Force sync with replace if reconciliation is stuck" \
+		"WARNING: --force uses replace instead of apply" \
+		"Causes brief downtime for replaced resources" \
+		"Use only when normal sync is stuck" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) app sync $(ARGOCD_DEV_APP_NAME) --force
+
+# ---------------------------------------------------------------------------------------------------------
+# Scenario 4 — Application Synced but Pods Not Starting
+# Symptom: Application shows Synced but health is Degraded. 
+#          This is the most dangerous state because operators think deployment succeeded.
+# ---------------------------------------------------------------------------------------------------------
+troubleshoot-application-is-synced-but-pods-not-starting: ## Application shows Synced but health is Degraded. This is the most dangerous state because operators think deployment succeeded.
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 1: Check what ArgoCD sees as health" \
+		"	Look for: HEALTH STATUS = Degraded" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) app get $(ARGOCD_DEV_APP_NAME)
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 2: Find the degraded resource" \
+		"	One of the resources will show Degraded or Missing" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) app resources $(ARGOCD_DEV_APP_NAME)
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 3: Get details on the degraded resource" \
+		"	Example: Deployment is Degraded" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	$(ARGOCD_CLI_TOOL) app actions list $(ARGOCD_DEV_APP_NAME) \
+	--kind Deployment \
+	--resource-name myapp-dev
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 4: Check Kubernetes events for the degraded resource" \
+		"	Example: Deployment is Degraded" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	kubectl describe deployment $(ARGOCD_DEV_APP_NAME) -n $(K8S_NAMESPACE_DEV)
+	kubectl get events -n $(K8S_NAMESPACE_DEV) --sort-by=.lastTimestamp | tail -20
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"Step 5: Check pod status" ; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	kubectl get pods -n $(K8S_NAMESPACE_DEV)
+	kubectl logs -n $(K8S_NAMESPACE_DEV) -l app.kubernetes.io/name=myapp --tail=50
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		" Common causes of Synced + Degraded: " \
+		" - Image pull failure (ImagePullBackOff) — wrong registry credentials " \
+		" - ConfigMap referenced but not yet created (race condition in sync wave) " \
+		" - Resource quota exceeded — pod pending because namespace is full " \
+		" - Node has no capacity — pod pending due to insufficient resources " \
+		" - Liveness probe misconfigured — pod restarting immediately after start "; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+
+# ---------------------------------------------------------------------------------------------------------
+# Scenario 5 — Prune Deletes a Resource That Should Exist
+# Symptom: ArgoCD sync deleted a Secret or ConfigMap that was manually created in the namespace.
+#	Why this happens: With prune: true, ArgoCD deletes any resource in the managed namespace that 
+#	is NOT in the Git source. If you manually created kubectl create secret generic debug-credentials -n myapp-dev, 
+#	ArgoCD considers it drift and deletes it on next sync.
+# ---------------------------------------------------------------------------------------------------------
+ 
+troubleshoot-argocd-sync-deleted-resource-that-was-manually-created: ## Troubleshoot Prune Deletes a Resource That Should Exist. ArgoCD sync deleted a Secret or ConfigMap that was manually created in the namespace.
+	@printf '$(CYAN) %s $(RESET) \n' \
+		" Step 1: Understand what ArgoCD considers "managed" " \
+		" 	ArgoCD tracks resources using annotations when resourceTrackingMethod=annotation " \
+		" 	Resources without the ArgoCD tracking annotation are considered orphans" \
+		" 	Check if a resource has the tracking annotation" \
+		" 		If no argocd.argoproj.io/app-name annotation → ArgoCD will prune it"; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+# 	kubectl get secret debug-credentials -n $(K8S_NAMESPACE_DEV) \
+# 	-o jsonpath='{.metadata.annotations}'
+
+	@SECRET_NAME=$$(kubectl get secret -n $(K8S_NAMESPACE_DEV) -o name | head -n 1); \
+	if [ -n "$$SECRET_NAME" ]; then \
+		kubectl describe $$SECRET_NAME -n $(K8S_NAMESPACE_DEV); \
+	else echo "No secrets found"; \
+	fi
+
+	@printf '$(CYAN) %s $(RESET) \n' \
+		" Step 2: Prevention options" \
+		" 	Option A: Add the resource to Git (correct approach) " \
+		" 		      This is the right answer 99% of the time" \
+		" 	Option B: Exclude specific resources from ArgoCD management" \
+		" 			  In the Application spec (myapp-dev.yaml), add:" 
+# 					# cat >> ~/k8s-learning/t03-argocd/applications/myapp-dev.yaml << 'EOF'
+# 					# Add to spec section:
+# 					# ignoreDifferences:
+# 					#   - group: ""
+# 					#     kind: Secret
+# 					#     name: debug-credentials
+# 					#     namespace: myapp-dev
+# 					#     jsonPointers:
+# 					#       - /data
+# 					EOF
+	@printf '$(CYAN) %s $(RESET) \n' \
+		"   Option C: Use a resource exclusion in argocd-cm "\
+		" 		ArgoCD tracks resources using annotations when resourceTrackingMethod=annotation " \
+		" 		Resources without the ArgoCD tracking annotation are considered orphans" \
+		" 		Check if a resource has the tracking annotation" \
+		" 		If no argocd.argoproj.io/app-name annotation → ArgoCD will prune it" \
+		" 		WARNING: this excludes ALL secrets matching the pattern from ALL Applications" \
+		" 		Use ignoreDifferences on the specific Application instead"; \
+	printf '$(CYAN) %s $(RESET) \n' "Press ENTER to continue...";  \
+	read -r _; \
+	kubectl patch configmap $(ARGOCD_MAIN_CM) -n $(K8S_ARGOCD_NAMESPACE) --type merge \
+  		-p "{\"data\":{\"resource.exclusions\":\"- apiGroups: [\\\"\\\"]\\n  kinds: [\\\"Secret\\\"]\\n  clusters: [\\\"*\\\"]\\n  namespaces: [\\\"myapp-dev\\\"]\\n  name: \\\"debug-*\\\"\\n\"}}"
