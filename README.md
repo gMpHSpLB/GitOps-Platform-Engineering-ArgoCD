@@ -1,4 +1,6 @@
-# Project: Enterprise Kubernetes Delivery: Helm and ArgoCD
+# Project: - Enterprise Kubernetes Delivery: Helm and ArgoCD
+           - GitOps Platform Engineering with ArgoCD
+## Environment: minikube on WSL2, ArgoCD v2.x
 
 Helm and ArgoCD are complementary, not competing. Helm solves the packaging and parameterisation problem — how to produce correct, environment-specific Kubernetes manifests from a single chart source. ArgoCD solves the delivery and operational control problem — how to ensure the cluster always reflects Git, changes are audited, and drift is detected and remediated continuously.
 
