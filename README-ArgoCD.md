@@ -1,6 +1,6 @@
-# Operating a Production ArgoCD Instance with Application Lifecycle Management
+# 1. Operating a Production ArgoCD Instance with Application Lifecycle Management
 
-## The ArgoCD architecture 
+## 1.1. The ArgoCD architecture 
 ```console
 argocd-server                   → UI and API server. Handles user/CI requests.
 argocd-repo-server              → Clones Git repos, renders Helm/Kustomize manifests.
@@ -10,10 +10,10 @@ argocd-application-controller   → The heart of ArgoCD. Watches Applications in
                                   Triggers syncs.
 argocd-dex-server               → OIDC provider for SSO integration.
 ```
-### ArgoCD architecture diagram
+### 1.1.1. ArgoCD architecture diagram
 <img width="2760" height="3440" alt="t03_argocd_architecture" src="https://github.com/user-attachments/assets/4351799a-9d9e-46ac-9761-343090dc88c2" />
 
-## How Resources Connect in Practice: In a Helm + ArgoCD workflow
+## 1.2. How Resources Connect in Practice: In a Helm + ArgoCD workflow
 ```console
 Developer writes code
   → CI builds image (sha256:abc) → pushed to registry
@@ -31,7 +31,7 @@ Developer writes code
   → app-controller re-fetches live state → Synced + Healthy
   → Notification sent to Slack
 ```
-## The sync loop — what actually happens every 3 minutes (default):
+## 1.3. The sync loop — what actually happens every 3 minutes (default):
 ```console
 1. argocd-application-controller reads Application object from etcd 
    (etcd is a distributed, strongly consistent key-value store used 
@@ -49,17 +49,17 @@ Developer writes code
 9. Cluster reconciles
 10. Controller re-fetches live state → if matches desired → Synced
 ```
-## ArgoCD-Based GitOps Workflow Diagram
+## 1.4. ArgoCD-Based GitOps Workflow Diagram
 <img width="2760" height="3760" alt="argocd_gitops_workflow" src="https://github.com/user-attachments/assets/98f524f6-21dd-4e16-a98c-aba21d2c2fe1" />
 
-## What ArgoCD does NOT do:
+## 1.5. What ArgoCD does NOT do:
 ```console
 •	It does not replace Helm. It calls Helm's template engine to render manifests.
 •	It does not store application state. The Git repo is the state.
 •	It does not automatically redeploy on image changes (that's an image updater or CI push).
 •	It does not encrypt secrets. That is External Secrets Operator's job.
 ```
-## The GitOps contract ArgoCD enforces:
+## 1.6. The GitOps contract ArgoCD enforces:
 ```console
 •	Git is the only source of truth
 •	Any manual kubectl apply or kubectl edit to a managed resource is overwritten on next sync

@@ -1,6 +1,6 @@
-# Best Practices and Enterprise Recommendations
+# 1. Best Practices and Enterprise Recommendations
 
-## Three-Environment Architecture: Sample Design
+## 1.1. Three-Environment Architecture: Sample Design
 ```console
 Repository structure:
   ├── app-repo/
@@ -26,7 +26,7 @@ Repository structure:
           └── myapp-project.yaml  ← AppProject (RBAC boundary)
 ```
 
-## Separation of Responsibilities
+## 1.2. Separation of Responsibilities
 ```console
 +--------------+------------------------------------+------------------------------+
 | Team         | Responsibility                     | Tools                        |
@@ -44,14 +44,14 @@ Repository structure:
 |              | runbooks, incident response        |                              |
 +--------------+------------------------------------+------------------------------+
 ```
-### GitOps enforces this separation structurally:
+### 1.2.1. GitOps enforces this separation structurally:
 ```console 
    - developers push to the app repo, 
    - platform engineers manage the GitOps repo structure.
 ```
 Neither has direct prod cluster access.
 
-## Common Mistakes
+## 1.3. Common Mistakes
 +----------------------------------+----------------------------------+----------------------------------+
 | Mistake                          | Consequence                      | Fix                              |
 +----------------------------------+----------------------------------+----------------------------------+
@@ -83,7 +83,7 @@ Neither has direct prod cluster access.
 |                                  | subsequent deployments           | pipelines                         |
 +----------------------------------+----------------------------------+----------------------------------+
 
-## Secret Management Approaches
+## 1.4. Secret Management Approaches
 ```console
 +-------------------------+----------------------------+-------------+-----------------------------+
 | Approach                | Tool                       | Maturity    | When to use                 |
@@ -102,11 +102,11 @@ Neither has direct prod cluster access.
 |                         |                            |             | production                  |
 +-------------------------+----------------------------+-------------+-----------------------------+
 ```
-### ESO is the recommended enterprise approach (2024+). 
+### 1.4.1. ESO is the recommended enterprise approach (2024+). 
 It integrates cleanly with ArgoCD: the GitOps repo stores ExternalSecret CRs (safe to commit), and 
 ESO syncs actual secret values from Vault into the cluster at runtime.
 
-## Environment Promotion Strategy
+## 1.5. Environment Promotion Strategy
 
 ```console
 Environments:          dev → staging → prod
@@ -117,7 +117,7 @@ Approval gates:        none → PR review → Change Advisory Board (CAB)
 Rollback authority:    developer → platform engineer → SRE on-call
 ```
 
-## When to Choose Helm Alone vs Helm + ArgoCD
+## 1.6. When to Choose Helm Alone vs Helm + ArgoCD
 ```console
 +-----------------------------------------------+--------------------------------------+
 | Scenario                                      | Recommendation                       |
@@ -140,7 +140,7 @@ Rollback authority:    developer → platform engineer → SRE on-call
 |                                               | (with mirrored repos)                |
 +-----------------------------------------------+--------------------------------------+
 ```
-## Platform Team Delivery Model
+## 1.7. Platform Team Delivery Model
 ```console
 Platform team responsibilities:
   ├── Cluster infrastructure (Terraform)
@@ -166,7 +166,7 @@ Separation enforced by:
   └── RBAC (developers have read-only cluster access, not kubectl apply)
 ```
 
-  ## Observability Considerations
+  ## 1.8. Observability Considerations
 
 ```console
    ### Every Helm chart should include these for enterprise observability:
@@ -197,7 +197,7 @@ Separation enforced by:
       argocd_app_info{sync_status!="Synced"} > 0  (drift alert)
       argocd_app_info{health_status!="Healthy"} > 0 (health alert)
 ```
-## Testing Strategy
+## 1.9. Testing Strategy
 +---------------------+-------------------------+------------------+------------------------------+
 | Test type           | Tool                    | When             | What it validates            |
 +---------------------+-------------------------+------------------+------------------------------+

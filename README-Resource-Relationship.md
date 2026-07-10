@@ -1,4 +1,4 @@
-# Resource Relationship Map
+# 1. Resource Relationship Map
 ```console
 +-------------------+-------------------------+-------------------------+----------------------------+-------------------+
 | Resource          | Created by              | Consumed by             | Connects to               | Required          |
