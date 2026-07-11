@@ -15,6 +15,9 @@
       - [1.7.3.1. Tool kubectl Helm ArgoCD](#1731-tool-kubectl-helm-argocd)
       - [1.7.3.2. Selectors in Kubernetes](#1732-selectors-in-kubernetes)
       - [1.7.3.3  Kubernetes Annotations](#1733--kubernetes-annotations)
+      - [1.7.3.4  Reconciliation:The\_ArgoCD\_Control\_Loop](#1734--reconciliationthe_argocd_control_loop)
+      - [1.7.3.5  Sidecars](#1735--sidecars)
+      - [1.7.3.6  Tolerations](#1736--tolerations)
     - [1.7.4. How Enterprise Works](#174-how-enterprise-works)
 
 # 1. Project: - Enterprise Kubernetes Delivery: Helm and ArgoCD
@@ -101,5 +104,8 @@ The platform team designs and owns the delivery infrastructure. Developer teams 
 #### 1.7.3.1. [Tool kubectl Helm ArgoCD](./README-Tooling-Comparison-kubectl-Helm-ArgoCD.md)
 #### 1.7.3.2. [Selectors in Kubernetes](./README-Selectors-in-Kubernetes.md)
 #### 1.7.3.3  [Kubernetes Annotations](./README-Kubernetes%20Annotations.md) 
-      
+#### 1.7.3.4  [Reconciliation:The_ArgoCD_Control_Loop](./README-ArgoCD_Reconciliation:The_ArgoCD_Control_Loop.md)
+#### 1.7.3.5  [Sidecars](./README-ArgoCD_Sidecars.md)
+#### 1.7.3.6  [Tolerations](./README-ArgoCD_Tolerations.md)
+
 ### 1.7.4. [How Enterprise Works](./README-How-Enterprise-Team_Works.md) 

@@ -18,18 +18,38 @@ yaml
 
 ## 2. Labels vs Annotations — The Definitive Distinction
 
-| Dimension             | Labels                                  | Annotations                  |
-|-----------------------|-----------------------------------------|------------------------------|
-| Used in selectors     | Yes — Services, HPA, PDB, NetworkPolicy | Never                        |
-| Kubernetes indexes    | Yes — efficient lookup by label         | No — not indexed             |
-| Size limit            | Key+value ≤ 63 chars each               | Values can be megabytes      |
-| Valid characters      | Alphanumeric, -, _, . only              | Any UTF-8 string             |
-| Purpose               | Identification and grouping             | Operational metadata         |
-| Mutable in production | Dangerous — breaks selector matching    | Safe to add/remove           |
-| Example               | app.kubernetes.io/name: myapp           | prometheus.io/scrape: "true" |
+| Dimension             | Labels                                  | Annotations                           |
+|-----------------------|-----------------------------------------|---------------------------------------|
+| Used in selectors     | Yes — Services, HPA, PDB, NetworkPolicy | Never                                 |
+
+| Kubernetes indexes    | Yes — efficient lookup by label         | No — not indexed                      |
+
+| Size limit            | Key+value ≤ 63 chars each               | Values can be megabytes               |
+
+| Valid characters      | Alphanumeric, -, _, . only              | Any UTF-8 string                      |
+
+| Purpose               | Identification and grouping             | Operational metadata                  |
+
+| Mutable in production | Dangerous — breaks selector matching    | Safe to add/remove                    |
+
+| Example               | app.kubernetes.io/name: myapp           | prometheus.io/scrape: "true"          |
+
+| Main use              | Select, group, and identify objects     | Store extra, non-identifying metadata |
+
+| Used by               | Services, Deployments, NetworkPolicies, | Controllers, tools, humans            |
+|                       |   kubectl selectors                     |                                       |
+
+| Queryable             | Yes                                     | No                                    |
+
+| Best for              | `app=myapp`, `env=prod`                 | Build ID, owner, notes, tool config   |
+
+| Size/complexity       | Small and simple                        | Can be larger and more structured     |
+
+| Impact on behavior    | Affects selection and scheduling        | Does not affect selection             |
+
 
 ## 3. Critical Annotation Use Cases
-1. ArgoCD resource tracking:
+### 3.1. ArgoCD resource tracking:
 yaml
 ```console
   annotations:
@@ -39,7 +59,7 @@ yaml
     # Used when resourceTrackingMethod: annotation (preferred over label)
     app.kubernetes.io/managed-by: argocd
 ```
-2. ArgoCD sync behaviour:
+### 3.2. ArgoCD sync behaviour:
 yaml
 ```console
   annotations:
@@ -53,7 +73,7 @@ yaml
     argocd.argoproj.io/hook-delete-policy: HookSucceeded  # Delete after success
 ```
 
-3. Config reload trigger (Helm checksum pattern):
+### 3.3. Config reload trigger (Helm checksum pattern):
 yaml
 ```console
   annotations:
@@ -63,7 +83,7 @@ yaml
     checksum/config: "a3b4c5d6e7f8..."
     checksum/secret: "b4c5d6e7f8a9..."
 ```
-4. Kubernetes operational annotations:
+### 3.4. Kubernetes operational annotations:
 yaml
 ```console
   annotations:
@@ -82,7 +102,7 @@ yaml
     # Cluster autoscaler: don't evict this pod
     cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
 ```
-5. Prometheus scrape configuration:
+### 3.5. Prometheus scrape configuration:
 yaml
 ```console
   annotations:
@@ -91,7 +111,7 @@ yaml
     prometheus.io/path: "/metrics"
     prometheus.io/scheme: "http"
 ```
-6. cert-manager certificate issuance:
+### 3.6. cert-manager certificate issuance:
 yaml
 ```console
   annotations:
@@ -99,7 +119,7 @@ yaml
     cert-manager.io/cluster-issuer: letsencrypt-prod
     cert-manager.io/common-name: myapp.example.com
 ```
-7. ArgoCD ignore differences:
+### 3.7. ArgoCD ignore differences:
 yaml
 ```console
   # On the Application itself — not on the managed resource
